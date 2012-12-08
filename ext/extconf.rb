@@ -69,7 +69,6 @@ Dir.chdir(HERE) do
       Dir.glob("patches/*").each do |file|
         safe_sh("patch -p1 < #{file}")
       end
-      safe_sh("patch")
       safe_sh(configure)
       safe_sh("make  2>&1")
       safe_sh("make install 2>&1")
