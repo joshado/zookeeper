@@ -64,10 +64,12 @@ Dir.chdir(HERE) do
     # clean up stupid apple rsrc fork bullshit
     FileUtils.rm_f(Dir['**/._*'].select{|p| test(?f, p)})
 
-    Dir.chdir(BUNDLE_PATH) do        
-      configure = "./configure --prefix=#{HERE} --with-pic --without-cppunit --disable-dependency-tracking #{$EXTRA_CONF} 2>&1"
-      configure = "env CFLAGS='#{DEBUG_CFLAGS}' #{configure}" if ZK_DEBUG
-
+    Dir.chdir(BUNDLE_PATH) do
+      configure = "env CFLAGS='-pthread -D_POSIX_PTHREAD_SEMANTICS' LDFLAGS='-lnsl -lsocket' ./configure --prefix=#{HERE} --without-syncapi --without-shared --disable-shared --with-pic #{$EXTRA_CONF} 2>&1"
+      Dir.glob("patches/*").each do |file|
+        safe_sh("patch -p1 < #{file}")
+      end
+      safe_sh("patch")
       safe_sh(configure)
       safe_sh("make  2>&1")
       safe_sh("make install 2>&1")
