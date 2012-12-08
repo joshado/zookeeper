@@ -67,7 +67,7 @@ Dir.chdir(HERE) do
     Dir.chdir(BUNDLE_PATH) do
       configure = "env CFLAGS='-pthread -D_POSIX_PTHREAD_SEMANTICS' LDFLAGS='-lnsl -lsocket' ./configure --prefix=#{HERE} --without-syncapi --without-shared --disable-shared --with-pic #{$EXTRA_CONF} 2>&1"
       Dir.glob(File.join(HERE,"patches/*")).each do |file|
-        safe_sh("patch -p1 < #{file}")
+        safe_sh("cd #{HERE} && patch -p1 < #{file}")
       end
       safe_sh(configure)
       safe_sh("make  2>&1")
