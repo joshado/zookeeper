@@ -1,9 +1,9 @@
 require 'java'
 require 'thread'
-require 'rubygems'
 
-gem 'slyphon-log4j', '= 1.2.15'
-gem 'slyphon-zookeeper_jar', '= 3.3.5'
+# require 'rubygems'
+# gem 'slyphon-log4j', '= 1.2.15'
+# gem 'zk-ruby-zookeeper_jar', "= #{Zookeeper::DRIVER_VERSION}"
 
 require 'log4j'
 require 'zookeeper_jar'
@@ -182,13 +182,13 @@ class JavaBase
 
   attr_reader :event_queue
 
-  def reopen(timeout=10, watcher=nil)
+  def reopen(timeout=10, watcher=nil, opts = {})
 #     watcher ||= @default_watcher
 
     @mutex.synchronize do
       @req_registry.clear_watchers!
 
-      replace_jzk!
+      replace_jzk!(opts)
       wait_until_connected
     end
 
@@ -220,7 +220,7 @@ class JavaBase
     # allows connected-state handlers to be registered before 
     yield self if block_given?
 
-    reopen(timeout)
+    reopen(timeout, nil, options)
     return nil unless connected?
     @_running = true
     setup_dispatch_thread!
@@ -283,8 +283,9 @@ class JavaBase
         [Code::Ok, nil, nil]    # the 'nil, nil' isn't strictly necessary here
       else # sync
         stat = JZKD::Stat.new
-        data = String.from_java_bytes(jzk.getData(path, watch_cb, stat))
 
+        value = jzk.getData(path, watch_cb, stat)
+        data = String.from_java_bytes(value) unless value.nil?
         [Code::Ok, data, stat.to_hash]
       end
     end
@@ -440,16 +441,25 @@ class JavaBase
       @mutex.synchronize { @jzk }
     end
 
-    def handle_keeper_exception
-      yield
-    rescue JZK::KeeperException => e
-      if e.respond_to?(:cause) and e.cause and e.cause.respond_to?(:code) and e.cause.code and e.cause.code.respond_to?(:intValue)
-        e.cause.code.intValue
-      else
-        raise e # dunno what happened, just raise it
+    # java exceptions are not wrapped anymore in JRuby 1.7+
+    if JRUBY_VERSION >= '1.7.0'
+      def handle_keeper_exception
+        yield
+      rescue JZK::KeeperException => e
+        # code is an enum and always set -> we don't need any additional checks here
+        e.code.intValue
+      end
+    else
+      def handle_keeper_exception
+        yield
+      rescue JZK::KeeperException => e
+        if e.respond_to?(:cause) and e.cause and e.cause.respond_to?(:code) and e.cause.code and e.cause.code.respond_to?(:intValue)
+          e.cause.code.intValue
+        else
+          raise e # dunno what happened, just raise it
+        end
       end
     end
-
 
     def call_type(callback, watcher)
       if callback
@@ -478,9 +488,13 @@ class JavaBase
       }
     end
 
-    def replace_jzk!
+    def replace_jzk!(opts = {})
       orig_jzk = @jzk
-      @jzk = JZK::ZooKeeper.new(@host, DEFAULT_SESSION_TIMEOUT, JavaCB::WatcherCallback.new(event_queue, :client => self))
+      if opts.has_key?(:session_id) && opts.has_key(:session_passwd)
+        @jzk = JZK::ZooKeeper.new(@host, DEFAULT_SESSION_TIMEOUT, JavaCB::WatcherCallback.new(event_queue, :client => self), opts.fetch(:session_id), opts.fetch(:session_passwd).to_java_bytes)
+      else
+        @jzk = JZK::ZooKeeper.new(@host, DEFAULT_SESSION_TIMEOUT, JavaCB::WatcherCallback.new(event_queue, :client => self))
+      end
     ensure
       orig_jzk.close if orig_jzk
     end

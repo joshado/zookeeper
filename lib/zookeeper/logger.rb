@@ -1,28 +1,27 @@
 module Zookeeper
   module Logger
-    def self.included(mod)
-      return false if mod < self    # avoid infinite recursion
-      mod.class_eval do 
-        def self.logger
-          ::Zookeeper.logger || ::Logging.logger[logger_name]
-        end
+    def self.wrapped_logger
+      if defined?(@@wrapped_logger)
+        @@wrapped_logger 
+      else
+        @@wrapped_logger = ::Logger.new(STDERR).tap { |l| l.level = ::Logger::FATAL }
       end
-      mod.extend(self)
     end
 
-    def self.set_default
-      ::Logging.logger['Zookeeper'].tap do |ch_root|
-        ::Logging.appenders.stderr.tap do |serr|
-          serr.layout = ::Logging.layouts.pattern(
-            :pattern => '%.1l, [%d] %c30.30{2}:  %m\n',
-            :date_pattern => '%Y-%m-%d %H:%M:%S.%6N' 
-          )
+    def self.wrapped_logger=(log)
+      @@wrapped_logger = log
+    end
 
-          ch_root.add_appenders(serr)
-        end
-
-        ch_root.level = ENV['ZOOKEEPER_DEBUG'] ? :debug : :off
+    # @private
+    module ClassMethods
+      def logger
+        ::Zookeeper.logger || ForwardingLogger.for(::Zookeeper::Logger.wrapped_logger, _zk_logger_name)
       end
+    end
+
+    def self.included(base)
+      # return false if base < self    # avoid infinite recursion
+      base.extend(ClassMethods)
     end
 
     private
@@ -34,8 +33,7 @@ module Zookeeper
       end
 
       def logger
-        @logger ||= (::Zookeeper.logger || ::Logging.logger[self.class.logger_name]) # logger_name defined in ::Logging::Utils
+        @logger ||= (::Zookeeper.logger || self.class.logger)
       end
-  end
-end
-
+  end # Logger
+end # Zookeeper

@@ -5,7 +5,6 @@ require 'monitor'
 require 'forwardable'
 require 'logger'
 require 'benchmark'
-require 'logging'
 
 module Zookeeper
   ZOOKEEPER_ROOT = File.expand_path('../..', __FILE__)
@@ -33,6 +32,7 @@ Zookeeper.require_lib(
   'zookeeper/core_ext',
   'zookeeper/monitor',
   'zookeeper/logger',
+  'zookeeper/logger/forwarding_logger',
   'zookeeper/forked',
   'zookeeper/latch',
   'zookeeper/acls',

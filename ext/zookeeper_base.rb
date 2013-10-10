@@ -27,7 +27,8 @@ class ZookeeperBase
   ZOO_LOG_LEVEL_DEBUG  = 4
 
   def_delegators :czk, :get_children, :exists, :delete, :get, :set,
-    :set_acl, :get_acl, :client_id, :sync, :add_auth, :wait_until_connected
+    :set_acl, :get_acl, :client_id, :sync, :add_auth, :wait_until_connected,
+    :connected_host
 
   def self.threadsafe_inquisitor(*syms)
     syms.each do |sym|
@@ -40,7 +41,8 @@ class ZookeeperBase
     end
   end
 
-  threadsafe_inquisitor :connected?, :connecting?, :associating?, :running?
+  threadsafe_inquisitor :connected?, :connecting?, :associating?, :running?,
+    :shutting_down?
 
   attr_reader :event_queue
   
@@ -60,14 +62,14 @@ class ZookeeperBase
   end
   private :reopen_after_fork!
 
-  def reopen(timeout = 10, watcher=nil)
+  def reopen(timeout = 10, watcher=nil, opts = {})
     raise "You cannot set the watcher to a different value this way anymore!" if watcher
 
     reopen_after_fork! if forked?
 
     @mutex.synchronize do
       @czk.close if @czk
-      @czk = CZookeeper.new(@host, @event_queue)
+      @czk = CZookeeper.new(@host, @event_queue, opts)
 
       # flushes all outstanding watcher reqs.
       @req_registry.clear_watchers!
@@ -79,7 +81,7 @@ class ZookeeperBase
     state
   end
 
-  def initialize(host, timeout = 10, watcher=nil)
+  def initialize(host, timeout = 10, watcher=nil, opts = {})
     # approximate the java behavior of raising java.lang.IllegalArgumentException if the host
     # argument ends with '/'
     raise ArgumentError, "Host argument #{host.inspect} may not end with /" if host.end_with?('/')
@@ -97,7 +99,7 @@ class ZookeeperBase
     
     yield self if block_given?
 
-    reopen(timeout)
+    reopen(timeout, nil, opts)
   end
 
   # if either of these happen, the user will need to renegotiate a connection via reopen
