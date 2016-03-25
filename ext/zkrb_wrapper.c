@@ -773,3 +773,5 @@ int zkrb_call_zoo_multi(zhandle_t *zh, int count, const zoo_op_t *ops, zoo_op_re
 
   return args.rc;
 }
+
+
